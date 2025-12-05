@@ -1,0 +1,14 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": MySQL database "internal_task_force" at "127.0.0.1:3306"
+
+Your database is now in sync with your Prisma schema. Done in 381ms
+
+Running generate... (Use --skip-generate to skip the generators)
+[2K[1A[2K[GRunning generate... - Prisma Client
+[2K[1A[2K[GEPERM: operation not permitted, rename 'C:\Users\ipsyc\Documents\Projects\intern
+al-task-force\node_modules\.pnpm\@prisma+client@5.22.0_prisma@5.22.0\node_module
+s\.prisma\client\query_engine-windows.dll.node.tmp26856' -> 'C:\Users\ipsyc\Docu
+ments\Projects\internal-task-force\node_modules\.pnpm\@prisma+client@5.22.0_pris
+ma@5.22.0\node_modules\.prisma\client\query_engine-windows.dll.node'
+
