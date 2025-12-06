@@ -6,7 +6,7 @@ import './i18n';
 import './index.css';
 
 const client = new Client({
-  url: 'http://localhost:4000/graphql',
+  url: import.meta.env.VITE_API_URL || 'http://localhost:4000/graphql',
   exchanges: [cacheExchange, fetchExchange],
   fetchOptions: {
     credentials: 'include',
