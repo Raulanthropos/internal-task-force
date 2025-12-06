@@ -456,7 +456,7 @@ const schema = createSchema({
 
 const allowedOrigins = [
   'http://localhost:5173', // Vite dev server
-  'https://internal-task-force-web-21ob-hdp13jgbb-raulanthropos-projects.vercel.app/',
+  'https://internal-task-force-web-21ob.vercel.app',
 ];
 
 const yoga = createYoga({
