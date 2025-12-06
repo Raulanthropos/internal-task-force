@@ -467,6 +467,8 @@ const yoga = createYoga({
 app.use('/graphql', yoga as any);
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}/graphql`);
+
+// CHANGE THIS BLOCK:
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`Server is running on http://0.0.0.0:${PORT}/graphql`);
 });
