@@ -20,22 +20,55 @@ enum Team {
   ENVIRONMENTAL
 }
 
+enum TicketStatus {
+  PLANNING
+  IN_PROGRESS
+  AWAITING_REVIEW
+  REJECTED
+  COMPLETED
+}
+
+enum ClientStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TicketPriority {
+  P0
+  P1
+  P2
+}
+
 model User {
   id           String @id @default(uuid())
   username     String @unique
+  fullName     String?
   passwordHash String
-  role         Role
-  team         Team?
-  comments     Comment[]
+  role           Role
+  team           Team?
+  comments       Comment[]
+  assignedTickets Ticket[] @relation("TicketAssignees")
+  createdTickets Ticket[] @relation("TicketCreator")
+  notifications  Notification[]
+}
+
+model Client {
+  id        String       @id @default(uuid())
+  name      String       @unique
+  logoUrl   String
+  status    ClientStatus @default(ACTIVE)
+  projects  Project[]
 }
 
 model Project {
-  id        String   @id @default(uuid())
-  codeName  String   @unique
-  client    String
-  status    String
-  scopes    Scope[]
-  createdAt DateTime @default(now())
+  id                  String   @id @default(uuid())
+  codeName            String   @unique
+  clientId            String
+  client              Client   @relation(fields: [clientId], references: [id])
+  clientContactPerson String?
+  status              String
+  scopes              Scope[]
+  createdAt           DateTime @default(now())
 }
 
 model Scope {
@@ -45,14 +78,29 @@ model Scope {
   project                Project   @relation(fields: [projectId], references: [id])
   tickets                Ticket[]
   comments               Comment[]
-  allowCrossTeamComments Boolean   @default(false)
+  allowCrossTeamComments Boolean   @default(true)
 }
 
 model Ticket {
-  id             String @id @default(uuid())
-  technicalSpecs String? @map("technical_specs")
+  id             String       @id @default(uuid())
+  title          String
+  technicalSpecs String?      @map("technical_specs")
+  priority       TicketPriority @default(P2)
+  status         TicketStatus @default(PLANNING)
   scopeId        String
-  scope          Scope  @relation(fields: [scopeId], references: [id])
+  scope          Scope        @relation(fields: [scopeId], references: [id])
+  assignees      User[]       @relation("TicketAssignees")
+  creatorId      String
+  creator        User         @relation("TicketCreator", fields: [creatorId], references: [id])
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  recipientId String
+  recipient   User     @relation(fields: [recipientId], references: [id])
+  message     String
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
 }
 
 model Comment {

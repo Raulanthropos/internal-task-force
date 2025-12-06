@@ -1,49 +1,113 @@
-import { useQuery, gql, useMutation } from 'urql';
-import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState } from "react";
+import { useQuery, useMutation, gql } from "urql";
+import { TicketCreateDialog } from "../components/TicketCreateDialog";
+import { TicketEditDialog } from "../components/TicketEditDialog";
+import { AssigneeSelectDialog } from "../components/AssigneeSelectDialog";
+import { ClientSidebar } from "../components/ClientSidebar";
+import { NotificationBell } from "../components/NotificationBell";
+import { useNavigate } from "react-router-dom";
+import { Button } from "../components/ui/button";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useTranslation } from 'react-i18next';
-import { LanguageToggle } from '@/components/LanguageToggle';
-import { ModeToggle } from '@/components/mode-toggle';
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "../components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "../components/ui/tooltip";
+import {
+  Pencil,
+  Plus,
+  Check,
+  X,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react";
 
-const PROJECTS_QUERY = gql`
-  query Projects {
+const getInitials = (name: string) => {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .substring(0, 2)
+    .toUpperCase();
+};
+
+// Queries & Mutations
+
+const ME_QUERY = gql`
+  query Me {
     me {
       id
       username
+      fullName
       role
       team
     }
+  }
+`;
+
+const LOGOUT_MUTATION = gql`
+  mutation Logout {
+    logout
+  }
+`;
+
+const PROJECTS_QUERY = gql`
+  query Projects {
     projects {
       id
       codeName
-      client
       status
+      client {
+        name
+        logoUrl
+      }
       scopes {
         id
         team
         allowCrossTeamComments
         tickets {
           id
-          technical_specs
+          title
+          technicalSpecs
+          status
+          priority
+          assignees {
+            id
+            username
+            fullName
+          }
+          creator {
+            id
+            username
+            fullName
+          }
         }
         comments {
           id
           content
           createdAt
           user {
+            id
             username
+            fullName
           }
         }
       }
@@ -56,7 +120,6 @@ const ADD_COMMENT_MUTATION = gql`
     addComment(scopeId: $scopeId, content: $content) {
       id
       content
-      createdAt
       user {
         username
       }
@@ -64,215 +127,470 @@ const ADD_COMMENT_MUTATION = gql`
   }
 `;
 
-const TOGGLE_SCOPE_COMMENTS_MUTATION = gql`
-  mutation ToggleScopeComments($scopeId: String!) {
-    toggleScopeComments(scopeId: $scopeId) {
+const UPDATE_COMMENT_MUTATION = gql`
+  mutation UpdateComment($commentId: String!, $content: String!) {
+    updateComment(commentId: $commentId, content: $content) {
       id
-      allowCrossTeamComments
+      content
     }
   }
 `;
 
-export default function Dashboard() {
-    const { t } = useTranslation();
-    const navigate = useNavigate();
-    const [result] = useQuery({ query: PROJECTS_QUERY });
-    const [{ fetching: loggingOut }, logout] = useMutation(gql`
-        mutation Logout {
-            logout
-        }
-    `);
-    const [, addComment] = useMutation(ADD_COMMENT_MUTATION);
-    const [, toggleScopeComments] = useMutation(TOGGLE_SCOPE_COMMENTS_MUTATION);
+const UPDATE_TICKET_STATUS_MUTATION = gql`
+  mutation UpdateTicketStatus($ticketId: String!, $status: TicketStatus!) {
+    updateTicketStatus(ticketId: $ticketId, status: $status) {
+      id
+      status
+    }
+  }
+`;
 
-    const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
+export function Dashboard() {
+  const [{ data: meData }] = useQuery({ query: ME_QUERY });
+  const [
+    { data: projectsData, fetching: projectsFetching },
+    reexecuteProjects,
+  ] = useQuery({ query: PROJECTS_QUERY });
+  const [, logout] = useMutation(LOGOUT_MUTATION);
+  const [, addComment] = useMutation(ADD_COMMENT_MUTATION);
+  const [, updateComment] = useMutation(UPDATE_COMMENT_MUTATION);
+  const [, updateTicketStatus] = useMutation(UPDATE_TICKET_STATUS_MUTATION);
 
-    const handleLogout = async () => {
-        const res = await logout({});
-        if (res.data?.logout) {
-            navigate('/login');
-        }
-    };
+  const navigate = useNavigate();
+  const [_loggingOut, setLoggingOut] = useState(false);
+  const [commentInputs, setCommentInputs] = useState<{ [key: string]: string }>(
+    {}
+  );
 
-    const handleAddComment = async (scopeId: string) => {
-        const content = commentInputs[scopeId];
-        if (!content?.trim()) return;
+  // Dialog States
+  const [editTicket, setEditTicket] = useState<any | null>(null);
+  const [assignTicket, setAssignTicket] = useState<any | null>(null);
 
-        await addComment({ scopeId, content });
-        setCommentInputs(prev => ({ ...prev, [scopeId]: '' }));
-    };
+  // Comment Editing State
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentContent, setEditingCommentContent] = useState("");
+  const [expandedScopes, setExpandedScopes] = useState<Record<string, boolean>>(
+    {}
+  );
 
-    const handleToggleComments = async (scopeId: string) => {
-        await toggleScopeComments({ scopeId });
-    };
+  const toggleScope = (scopeId: string) => {
+    setExpandedScopes((prev) => ({ ...prev, [scopeId]: !prev[scopeId] }));
+  };
 
-    if (result.fetching) return <div className="p-8 text-center">{t('login.loading')}</div>;
-    if (result.error) return <div className="p-8 text-red-500">Error: {result.error.message}</div>;
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await logout({});
+    navigate("/login");
+  };
 
-    const { me, projects } = result.data;
+  const handleCommentSubmit = async (scopeId: string) => {
+    const content = commentInputs[scopeId];
+    if (!content?.trim()) return;
 
-    // Helper to check if user can comment
-    const canComment = (scope: any) => {
-        if (me.role === 'ADMIN') return true;
-        if (me.team === scope.team) return true;
-        return scope.allowCrossTeamComments;
-    };
+    await addComment({ scopeId, content });
+    setCommentInputs((prev) => ({ ...prev, [scopeId]: "" }));
+  };
 
-    // Helper to check if user can toggle
-    const canToggle = (scope: any) => {
-        if (me.role === 'ADMIN') return true;
-        if (me.role === 'LEAD' && me.team === scope.team) return true;
-        return false;
-    };
+  const handleUpdateStatus = async (ticketId: string, val: string) => {
+    await updateTicketStatus({ ticketId, status: val });
+  };
 
-    return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-            <div className="border-b bg-white dark:bg-gray-800 px-8 py-4 flex justify-between items-center shadow-sm">
-                <div>
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        {t('dashboard.title')}
-                    </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        {t('dashboard.welcome', { user: me.username })}
-                        <Badge variant="outline" className="ml-2 gap-1">
-                            {t(`roles.${me.role}`)} • {me.team ? t(`teams.${me.team}`) : 'N/A'}
-                        </Badge>
-                    </p>
-                </div>
-                <div className="flex items-center gap-4">
-                    <LanguageToggle />
-                    <ModeToggle />
-                    <Button variant="outline" onClick={handleLogout}>{t('dashboard.logout')}</Button>
-                </div>
-            </div>
+  const startEditingComment = (id: string, content: string) => {
+    setEditingCommentId(id);
+    setEditingCommentContent(content);
+  };
 
-            <div className="p-8 space-y-6">
-                {projects.length === 0 ? (
-                    <Card className="p-12 text-center text-gray-500">
-                        {t('dashboard.no_projects')}
-                    </Card>
-                ) : (
-                    projects.map((project: any) => (
-                        <Card key={project.id} className="overflow-hidden border shadow-sm transition-all hover:shadow-md">
-                            <CardHeader className="bg-gray-50/50 dark:bg-gray-800/50 border-b pb-4">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <CardTitle className="text-xl flex items-center gap-2">
-                                            {project.codeName}
-                                            <Badge className={project.status === 'Active' ? 'bg-green-500' : 'bg-gray-500'}>
-                                                {project.status}
-                                            </Badge>
-                                        </CardTitle>
-                                        <CardDescription className="mt-1 font-medium text-gray-600 dark:text-gray-300">
-                                            {t('common.client')}: {project.client}
-                                        </CardDescription>
-                                    </div>
+  const saveEditedComment = async (id: string) => {
+    if (!editingCommentContent.trim()) return;
+    await updateComment({ commentId: id, content: editingCommentContent });
+    setEditingCommentId(null);
+  };
+
+  if (projectsFetching) return <div className="p-8">Loading dashboard...</div>;
+  if (!meData?.me) return <div className="p-8">Redirecting...</div>;
+
+  const { role, team, id: myId } = meData.me;
+  const canManageTickets = role === "ADMIN" || role === "LEAD";
+
+  const getPriorityColor = (p: string) => {
+    switch (p) {
+      case "P0":
+        return "bg-red-600 hover:bg-red-700 text-white";
+      case "P1":
+        return "bg-orange-500 hover:bg-orange-600 text-white";
+      case "P2":
+        return "bg-blue-500 hover:bg-blue-600 text-white";
+      default:
+        return "bg-slate-500 text-white";
+    }
+  };
+
+  return (
+    <div className="flex h-screen w-full bg-background">
+      <ClientSidebar />
+
+      <div className="flex-1 flex flex-col h-full overflow-hidden ml-16">
+        <header className="flex h-14 items-center gap-4 border-b bg-muted/40 px-6 lg:h-[60px]">
+          <h1 className="flex-1 font-semibold text-lg">
+            Welcome, {meData.me.fullName || meData.me.username}
+            <span className="ml-2 text-sm font-normal text-muted-foreground">
+              ({role} - {team || "Global"})
+            </span>
+          </h1>
+          <NotificationBell />
+          <Button variant="ghost" size="sm" onClick={handleLogout}>
+            Logout
+          </Button>
+        </header>
+
+        <main className="flex-1 overflow-auto p-6">
+          <div className="grid gap-6">
+            {projectsData?.projects.map((project: any) => (
+              <Card key={project.id} className="w-full">
+                <CardHeader>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <CardTitle>{project.codeName}</CardTitle>
+                      <CardDescription>
+                        Client: {project.client.name} | Status: {project.status}
+                      </CardDescription>
+                    </div>
+                    <Badge
+                      variant={
+                        project.status === "IN_PROGRESS"
+                          ? "default"
+                          : "secondary"
+                      }
+                    >
+                      {project.status}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Tabs defaultValue={project.scopes[0]?.id}>
+                    <TabsList className="mb-4">
+                      {project.scopes.map((scope: any) => (
+                        <TabsTrigger key={scope.id} value={scope.id}>
+                          {scope.team} Team
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                    {project.scopes.map((scope: any) => (
+                      <TabsContent
+                        key={scope.id}
+                        value={scope.id}
+                        className="space-y-4"
+                      >
+                        <div className="flex justify-between items-center bg-muted/50 p-2 rounded-md">
+                          <h3 className="font-semibold">Tickets</h3>
+                          {canManageTickets &&
+                            (role === "ADMIN" || team === scope.team) && (
+                              <TicketCreateDialog
+                                scopeId={scope.id}
+                                team={scope.team}
+                                onTicketCreated={() =>
+                                  reexecuteProjects({
+                                    requestPolicy: "network-only",
+                                  })
+                                }
+                              />
+                            )}
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                          {scope.tickets.map((ticket: any) => (
+                            <Card
+                              key={ticket.id}
+                              className="p-4 flex flex-col justify-between"
+                            >
+                              <div className="mb-2 flex justify-between items-start">
+                                <h4 className="font-bold">{ticket.title}</h4>
+                                <div className="flex gap-1">
+                                  {(myId === ticket.creator?.id ||
+                                    canManageTickets) && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 p-0 opacity-70 hover:opacity-100 transition-opacity"
+                                      onClick={() => setEditTicket(ticket)}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  <Badge
+                                    className={`${getPriorityColor(ticket.priority || "P2")} text-white text-[10px] px-1 py-0`}
+                                  >
+                                    {ticket.priority === "P0"
+                                      ? "CRITICAL"
+                                      : ticket.priority === "P1"
+                                        ? "HIGH"
+                                        : "NORMAL"}
+                                  </Badge>
                                 </div>
-                            </CardHeader>
-                            <CardContent className="p-0">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow className="bg-gray-50/30 dark:bg-gray-800/30">
-                                            <TableHead className="w-[15%]">{t('common.team')}</TableHead>
-                                            <TableHead className="w-[35%]">{t('common.scope')}</TableHead>
-                                            <TableHead className="w-[50%]">Comments</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {project.scopes.length > 0 ? (
-                                            project.scopes.map((scope: any) => (
-                                                <TableRow key={scope.id} className="group hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors">
-                                                    <TableCell className="font-medium align-top py-4">
-                                                        <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300">
-                                                            {t(`teams.${scope.team}`)}
-                                                        </Badge>
-                                                        {canToggle(scope) && (
-                                                            <div className="mt-2">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() => handleToggleComments(scope.id)}
-                                                                    className="text-xs h-6 px-2"
-                                                                >
-                                                                    {scope.allowCrossTeamComments ? 'Lock Comments' : 'Unlock Comments'}
-                                                                </Button>
-                                                            </div>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="align-top py-4">
-                                                        {scope.tickets.length > 0 ? (
-                                                            <div className="space-y-3">
-                                                                {scope.tickets.map((ticket: any) => (
-                                                                    <div key={ticket.id} className="bg-white dark:bg-gray-900 p-3 rounded-lg border text-sm shadow-sm group-hover:border-gray-300 transition-colors">
-                                                                        <div className="flex items-center gap-2 mb-1 text-gray-500 text-xs uppercase tracking-wider font-semibold">
-                                                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                                                                            Ticket
-                                                                        </div>
-                                                                        {ticket.technical_specs}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-gray-400 italic text-sm">{t('common.no_tickets')}</span>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="align-top py-4 bg-gray-50/20 dark:bg-gray-800/20">
-                                                        <div className="space-y-4">
-                                                            <div className="max-h-[200px] overflow-y-auto space-y-3 pr-2">
-                                                                {scope.comments.length > 0 ? (
-                                                                    scope.comments.map((comment: any) => (
-                                                                        <div key={comment.id} className="text-sm bg-white dark:bg-gray-900 p-3 rounded-lg border shadow-sm">
-                                                                            <div className="flex justify-between items-center mb-1 text-xs text-gray-500">
-                                                                                <span className="font-semibold text-gray-700 dark:text-gray-300">{comment.user.username}</span>
-                                                                                <span>{new Date(parseInt(comment.createdAt)).toLocaleDateString()}</span>
-                                                                            </div>
-                                                                            <p className="text-gray-800 dark:text-gray-200">{comment.content}</p>
-                                                                        </div>
-                                                                    ))
-                                                                ) : (
-                                                                    <div className="text-xs text-gray-400 italic text-center py-2">No comments yet</div>
-                                                                )}
-                                                            </div>
+                              </div>
 
-                                                            {canComment(scope) ? (
-                                                                <div className="flex gap-2">
-                                                                    <Input
-                                                                        placeholder="Add a comment..."
-                                                                        value={commentInputs[scope.id] || ''}
-                                                                        onChange={(e) => setCommentInputs(prev => ({ ...prev, [scope.id]: e.target.value }))}
-                                                                        onKeyDown={(e) => {
-                                                                            if (e.key === 'Enter') handleAddComment(scope.id);
-                                                                        }}
-                                                                        className="h-9 text-sm"
-                                                                    />
-                                                                    <Button size="sm" onClick={() => handleAddComment(scope.id)} className="h-9 w-9 p-0">
-                                                                        <span className="sr-only">Send</span>
-                                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><path d="m22 2-7 20-4-9-9-4Z" /><path d="M22 2 11 13" /></svg>
-                                                                    </Button>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="text-xs text-gray-400 italic text-center border-t pt-2">
-                                                                    Commenting restricted
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        ) : (
-                                            <TableRow>
-                                                <TableCell colSpan={3} className="text-center py-8 text-gray-500">
-                                                    {t('common.no_scopes')}
-                                                </TableCell>
-                                            </TableRow>
+                              <div className="text-sm text-gray-500 mb-4 line-clamp-3 whitespace-pre-wrap">
+                                {ticket.technicalSpecs}
+                              </div>
+
+                              <div className="flex justify-between items-center mt-auto pt-2 border-t">
+                                <Select
+                                  defaultValue={ticket.status}
+                                  onValueChange={(val) =>
+                                    handleUpdateStatus(ticket.id, val)
+                                  }
+                                  disabled={
+                                    role === "ENGINEER" &&
+                                    ![
+                                      "IN_PROGRESS",
+                                      "AWAITING_REVIEW",
+                                    ].includes(ticket.status) &&
+                                    [
+                                      "PLANNING",
+                                      "COMPLETED",
+                                      "REJECTED",
+                                    ].includes(ticket.status)
+                                  }
+                                >
+                                  <SelectTrigger className="h-7 w-[130px] text-xs">
+                                    <SelectValue placeholder="Status" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="PLANNING">
+                                      Planning
+                                    </SelectItem>
+                                    <SelectItem value="IN_PROGRESS">
+                                      In Progress
+                                    </SelectItem>
+                                    <SelectItem value="AWAITING_REVIEW">
+                                      Review
+                                    </SelectItem>
+                                    <SelectItem value="COMPLETED">
+                                      Completed
+                                    </SelectItem>
+                                    <SelectItem value="REJECTED">
+                                      Rejected
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+
+                                <div className="flex items-center justify-between relative">
+                                    <div className="flex gap-2">
+                                  <TooltipProvider>
+                                    {ticket.assignees?.map((assignee: any) => (
+                                      <Tooltip key={assignee.id}>
+                                        <TooltipTrigger>
+                                          <Avatar className="h-6 w-6 border-2 border-background">
+                                            <AvatarImage
+                                              src={`https://ui-avatars.com/api/?name=${assignee.username}&background=random`}
+                                            />
+                                            <AvatarFallback>
+                                              {getInitials(
+                                                assignee.fullName ||
+                                                  assignee.username
+                                              )}
+                                            </AvatarFallback>
+                                          </Avatar>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p>
+                                            {assignee.fullName ||
+                                              assignee.username}{" "}
+                                            (@{assignee.username})
+                                          </p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ))}
+                                  </TooltipProvider>
+                                    </div>
+                                  {canManageTickets &&
+                                    (role === "ADMIN" ||
+                                      team === scope.team) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 p-0 opacity-70 hover:opacity-100 transition-opacity ml-2"
+                                        onClick={() =>
+                                          setAssignTicket({
+                                            ...ticket,
+                                            team: scope.team,
+                                          })
+                                        }
+                                      >
+                                        <Plus className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                </div>
+                              </div>
+                            </Card>
+                          ))}
+                          {!scope.tickets.length && (
+                            <div className="text-sm text-gray-500 italic">
+                              No tickets yet.
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-6 border-t pt-4">
+                          <Button
+                            variant="ghost"
+                            className="flex items-center gap-2 p-0 h-auto font-semibold hover:bg-transparent mb-2"
+                            onClick={() => toggleScope(scope.id)}
+                          >
+                            {expandedScopes[scope.id] ? (
+                              <ChevronDown className="h-4 w-4" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4" />
+                            )}
+                            Scope Discussion
+                          </Button>
+
+                          {expandedScopes[scope.id] && (
+                            <div className="animate-in fade-in slide-in-from-top-1 duration-200">
+                              <div className="space-y-3 max-h-60 overflow-y-auto mb-4 bg-muted/20 p-2 rounded">
+                                {scope.comments.map((comment: any) => (
+                                  <div
+                                    key={comment.id}
+                                    className="text-sm p-2 bg-background rounded border shadow-sm group"
+                                  >
+                                    <div className="flex justify-between items-start">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className="font-bold">
+                                          {comment.user.fullName ||
+                                            comment.user.username}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {new Date(
+                                            Number(comment.createdAt)
+                                          ).toLocaleDateString()}
+                                        </span>
+                                      </div>
+                                      {comment.user.id === myId &&
+                                        editingCommentId !== comment.id && (
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() =>
+                                              startEditingComment(
+                                                comment.id,
+                                                comment.content
+                                              )
+                                            }
+                                          >
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
                                         )}
-                                    </TableBody>
-                                </Table>
-                            </CardContent>
-                        </Card>
-                    ))
-                )}
-            </div>
-        </div>
-    );
+                                    </div>
+
+                                    {editingCommentId === comment.id ? (
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <Input
+                                          value={editingCommentContent}
+                                          onChange={(e) =>
+                                            setEditingCommentContent(
+                                              e.target.value
+                                            )
+                                          }
+                                          className="h-8 text-sm"
+                                        />
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-8 w-8 text-green-600"
+                                          onClick={() =>
+                                            saveEditedComment(comment.id)
+                                          }
+                                        >
+                                          <Check className="h-4 w-4" />
+                                        </Button>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-8 w-8 text-red-600"
+                                          onClick={() =>
+                                            setEditingCommentId(null)
+                                          }
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
+                                      </div>
+                                    ) : (
+                                      <p>{comment.content}</p>
+                                    )}
+                                  </div>
+                                ))}
+                                {!scope.comments.length && (
+                                  <div className="text-sm text-gray-500 italic">
+                                    No comments yet.
+                                  </div>
+                                )}
+                              </div>
+
+                              {role === "ADMIN" ||
+                              team === scope.team ||
+                              scope.allowCrossTeamComments ? (
+                                <div className="flex gap-2">
+                                  <Input
+                                    placeholder="Add a comment..."
+                                    value={commentInputs[scope.id] || ""}
+                                    onChange={(e) =>
+                                      setCommentInputs((prev) => ({
+                                        ...prev,
+                                        [scope.id]: e.target.value,
+                                      }))
+                                    }
+                                    onKeyDown={(e) =>
+                                      e.key === "Enter" &&
+                                      handleCommentSubmit(scope.id)
+                                    }
+                                  />
+                                  <Button
+                                    onClick={() =>
+                                      handleCommentSubmit(scope.id)
+                                    }
+                                  >
+                                    Send
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="text-sm text-red-500 italic">
+                                  Comments locked for cross-team viewing.
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </main>
+      </div>
+
+      {editTicket && (
+        <TicketEditDialog
+          open={!!editTicket}
+          onOpenChange={(open) => !open && setEditTicket(null)}
+          ticketId={editTicket.id}
+          initialTitle={editTicket.title}
+          initialSpecs={editTicket.technicalSpecs}
+          initialPriority={editTicket.priority || "P2"}
+        />
+      )}
+
+      {assignTicket && (
+        <AssigneeSelectDialog
+          open={!!assignTicket}
+          onOpenChange={(open) => !open && setAssignTicket(null)}
+          ticketId={assignTicket.id}
+          team={assignTicket.team || "SOFTWARE"}
+          currentAssignees={assignTicket.assignees?.map((u: any) => u.id) || []}
+        />
+      )}
+    </div>
+  );
 }
