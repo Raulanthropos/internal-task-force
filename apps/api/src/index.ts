@@ -454,15 +454,37 @@ const schema = createSchema({
   resolvers
 });
 
+const allowedOrigins = [
+  'http://localhost:5173', // Vite dev server
+  'https://internal-task-force-web-21ob-hdp13jgbb-raulanthropos-projects.vercel.app/',
+];
+
 const yoga = createYoga({
   schema,
   maskedErrors: false,
+  // ADD THIS CORS BLOCK:
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['POST', 'GET', 'OPTIONS']
+  },
   context: async (ctx: YogaInitialContext & { req: any; res: any }) => {
     const token = ctx.req.cookies?.token;
     const user = getUser(token);
     return { ...ctx, prisma, user, res: ctx.res };
   }
 });
+
+// const yoga = createYoga({
+//   schema,
+//   maskedErrors: false,
+//   context: async (ctx: YogaInitialContext & { req: any; res: any }) => {
+//     const token = ctx.req.cookies?.token;
+//     const user = getUser(token);
+//     return { ...ctx, prisma, user, res: ctx.res };
+//   }
+// });
 
 app.use('/graphql', yoga as any);
 
