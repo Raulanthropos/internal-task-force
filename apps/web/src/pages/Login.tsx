@@ -62,7 +62,7 @@ export default function LoginPage() {
             <Card className="w-full max-w-md">
                 <CardHeader className="text-center">
                     <div className="mb-4 flex justify-center">
-                        {/* Motion Hellas Logo Placeholder */}
+                        {/* Internal Task Force Logo Placeholder */}
                         <div className="h-12 w-12 rounded bg-black flex items-center justify-center text-white font-bold text-xl">
                             MH
                         </div>
@@ -100,7 +100,7 @@ export default function LoginPage() {
                     </form>
                 </CardContent>
                 <CardFooter className="flex justify-center text-xs text-muted-foreground">
-                    &copy; 2025 Motion Hellas.
+                    &copy; 2025 Ioannis Psychias.
                 </CardFooter>
             </Card>
         </div>

@@ -6,7 +6,7 @@ const resources = {
     en: {
         translation: {
             "app": {
-                "title": "Motion Hellas PCS"
+                "title": "Internal Task Force"
             },
             "login": {
                 "title": "Login",
@@ -51,7 +51,7 @@ const resources = {
     el: {
         translation: {
             "app": {
-                "title": "Motion Hellas PCS"
+                "title": "Internal Task Force"
             },
             "login": {
                 "title": "Σύνδεση",
