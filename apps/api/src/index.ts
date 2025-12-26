@@ -22,6 +22,17 @@ app.use(cors({
   credentials: true
 }));
 app.use(cookieParser());
+import { seed } from '../prisma/seed';
+
+app.get('/seed', async (req, res) => {
+  try {
+    await seed();
+    res.send('Database seeded successfully!');
+  } catch (e: any) {
+    console.error(e);
+    res.status(500).send(`Seeding failed: ${e.message}`);
+  }
+});
 
 const typeDefs = `
   enum Role {

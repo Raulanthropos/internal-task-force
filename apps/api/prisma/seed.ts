@@ -5,7 +5,7 @@ const prisma = new PrismaClient();
 
 import fs from 'fs';
 
-async function main() {
+export async function seed() {
     await prisma.notification.deleteMany();
     await prisma.ticket.deleteMany();
     await prisma.scope.deleteMany();
@@ -162,12 +162,14 @@ async function main() {
     console.log('Seeding completed');
 }
 
-main()
-    .then(async () => {
-        await prisma.$disconnect();
-    })
-    .catch(async (e) => {
-        console.error(e);
-        await prisma.$disconnect();
-        process.exit(1);
-    });
+if (require.main === module) {
+    seed()
+        .then(async () => {
+            await prisma.$disconnect();
+        })
+        .catch(async (e) => {
+            console.error(e);
+            await prisma.$disconnect();
+            process.exit(1);
+        });
+}
