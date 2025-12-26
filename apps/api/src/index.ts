@@ -7,10 +7,18 @@ import { PrismaClient, Role, Team, TicketStatus, ClientStatus } from '@prisma/cl
 import { signToken, verifyPassword, getUser } from './auth';
 
 const prisma = new PrismaClient();
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5179',
+  'https://internal-task-force-web-21ob.vercel.app',
+];
+
 const app = express();
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5179'],
+  origin: allowedOrigins,
   credentials: true
 }));
 app.use(cookieParser());
@@ -454,10 +462,7 @@ const schema = createSchema({
   resolvers
 });
 
-const allowedOrigins = [
-  'http://localhost:5173', // Vite dev server
-  'https://internal-task-force-web-21ob.vercel.app',
-];
+
 
 const yoga = createYoga({
   schema,
