@@ -16,6 +16,7 @@ const allowedOrigins = [
 ];
 
 const app = express();
+app.set('trust proxy', 1);
 
 app.use(cors({
   origin: allowedOrigins,
@@ -223,13 +224,18 @@ const resolvers = {
       res.cookie('token', token, {
         httpOnly: true,
         maxAge: 1000 * 60 * 60 * 24 * 7,
-        sameSite: 'lax',
+        sameSite: 'none',
+        secure: true,
       });
 
       return { user };
     },
     logout: (parent: any, args: any, { res }: any) => {
-      res.clearCookie('token');
+      res.clearCookie('token', {
+        httpOnly: true,
+        sameSite: 'none',
+        secure: true
+      });
       return true;
     },
 
