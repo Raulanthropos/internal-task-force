@@ -198,8 +198,13 @@ const resolvers = {
   Mutation: {
     login: async (parent: any, { username, password }: any, { res }: any) => {
       const user = await prisma.user.findUnique({ where: { username } });
-      if (!user || !(await verifyPassword(password, user.passwordHash))) {
-        throw new Error('Invalid credentials');
+      if (!user) {
+        throw new Error(`User '${username}' not found`);
+      }
+
+      const isValid = await verifyPassword(password, user.passwordHash);
+      if (!isValid) {
+        throw new Error('Invalid password');
       }
 
       const token = signToken(user.id, user.role, user.team);
