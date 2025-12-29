@@ -63,13 +63,18 @@ export default function LoginPage() {
                 <CardHeader className="text-center">
                     <div className="mb-4 flex justify-center">
                         {/* Internal Task Force Logo Placeholder */}
-                        <div className="h-12 w-12 rounded bg-black flex items-center justify-center text-white font-bold text-xl">
-                            MH
+                        <div className="mb-6 flex justify-center">
+                            <img
+                                src="https://res.cloudinary.com/dlhs6o8ga/image/upload/v1766745926/mh_logo_jj4rqu.png"
+                                alt="Internal Task Force logo"
+                                className="h-24 w-auto object-contain"
+                            />
                         </div>
+
                     </div>
                     <CardTitle>{t('login.title')}</CardTitle>
                     <CardDescription>{t('app.title')}</CardDescription>
-                </CardHeader>
+                </CardHeader>   
                 <CardContent>
                     <form onSubmit={handleSubmit} className="grid gap-4">
                         <div className="grid gap-2">
