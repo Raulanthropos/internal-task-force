@@ -63,7 +63,7 @@ export default function LoginPage() {
                 <CardHeader className="text-center">
                     <div className="mb-4 flex justify-center">
                         {/* Internal Task Force Logo Placeholder */}
-                        <div className="mb-6 flex justify-center">
+                        <div className="flex justify-center">
                             <img
                                 src="https://res.cloudinary.com/dlhs6o8ga/image/upload/v1766745926/mh_logo_jj4rqu.png"
                                 alt="Internal Task Force logo"
